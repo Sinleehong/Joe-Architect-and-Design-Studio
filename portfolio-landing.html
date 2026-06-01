@@ -505,23 +505,89 @@
   <script>
     gsap.registerPlugin(ScrollTrigger);
 
-    // ── 0. VIDEO: หยุดก่อน — เล่นเมื่อ scroll ครั้งแรก เล่นจบแล้วหยุด ──
-    const heroVideo = document.getElementById('hero-video');
+    // ── 0. VIDEO + SCROLL LOCK LOGIC ──────────────────────────────────
+    const heroVideo  = document.getElementById('hero-video');
+    const heroTexts  = () => [
+      document.getElementById('hero-label'),
+      document.getElementById('hero-title'),
+      document.getElementById('hero-line'),
+      document.getElementById('hero-sub'),
+      document.getElementById('scroll-cue'),
+    ];
+
     heroVideo.pause();
 
-    let videoStarted = false;
+    let videoStarted  = false;
+    let videoFinished = false;
+    let savedScrollY  = 0;
 
+    // ── ล็อก scroll: คืนตำแหน่งทุกครั้งที่พยายาม scroll ──
+    function lockScroll(e) {
+      window.scrollTo(0, savedScrollY);
+    }
+
+    function enableScrollLock() {
+      savedScrollY = window.scrollY;
+      window.addEventListener('scroll', lockScroll, { passive: false });
+      window.addEventListener('wheel',  e => e.preventDefault(), { passive: false, capture: true });
+      window.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+    }
+
+    function disableScrollLock() {
+      window.removeEventListener('scroll', lockScroll);
+      // สร้าง clean listener โดยไม่เก็บ reference ไม่สามารถลบได้ง่าย
+      // แต่ wheel / touchmove ต้องการ named fn — ใช้ flag แทน
+      videoFinished = true;
+    }
+
+    // ── Wheel / touch: ปิดกั้นเมื่อวีดีโอยังเล่นอยู่ ──
+    window.addEventListener('wheel', (e) => {
+      if (videoStarted && !videoFinished) e.preventDefault();
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      if (videoStarted && !videoFinished) e.preventDefault();
+    }, { passive: false });
+
+    // ── Scroll ครั้งแรก → เล่นวีดีโอ + fade text ออก ──
     window.addEventListener('scroll', function onFirstScroll() {
       if (!videoStarted && window.scrollY > 0) {
         videoStarted = true;
+        savedScrollY = window.scrollY;
+        window.removeEventListener('scroll', onFirstScroll);
+
+        // Fade text ออก
+        gsap.to(heroTexts(), {
+          opacity: 0,
+          y: -20,
+          duration: 0.5,
+          stagger: 0.06,
+          ease: 'power2.out'
+        });
+
+        // เล่นวีดีโอ
         heroVideo.play();
-        window.removeEventListener('scroll', onFirstScroll); // ฟังแค่ครั้งแรก
+
+        // ล็อก scroll ระหว่างเล่น
+        window.scrollTo(0, 0);
+        savedScrollY = 0;
+        enableScrollLock();
       }
     }, { passive: true });
 
-    // เล่นจบแล้วหยุด (ไม่ loop)
+    // ── วีดีโอจบ → unlock scroll + fade text กลับมา ──
     heroVideo.addEventListener('ended', () => {
       heroVideo.pause();
+      disableScrollLock();
+
+      // Fade text กลับเข้ามา
+      gsap.to(heroTexts(), {
+        opacity: 1,
+        y: 0,
+        duration: 0.7,
+        stagger: 0.08,
+        ease: 'power3.out'
+      });
     });
 
 
