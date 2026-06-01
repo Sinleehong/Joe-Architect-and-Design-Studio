@@ -583,33 +583,40 @@
       enableScrollScrub();
     });
 
-    // ── Scroll Scrub: map scroll position → video.currentTime ──────────
+    // ── Scroll Scrub ────────────────────────────────────────────────────
+    // Layout: hero-scroll-driver = 350vh
+    // scrubZone = 0 → (driver.height - viewport) px  ← วีดีโอ scrub อยู่ตรงนี้
+    // scrollY = scrubZone end (bottom) → video at last frame
+    // scroll UP  → earlier frames
+    // scroll DOWN past scrubZone → ออกไปยัง section ถัดไปตามปกติ
     function enableScrollScrub() {
-      const driver   = document.querySelector('.hero-scroll-driver');
-      const fgLayer  = document.getElementById('layer-fg');
-      const bgLayer  = document.getElementById('layer-bg');
-      const duration = heroVideo.duration || 1;
-      let rafId      = null;
-      let targetTime = 0;
+      const driver    = document.querySelector('.hero-scroll-driver');
+      const fgLayer   = document.getElementById('layer-fg');
+      const bgLayer   = document.getElementById('layer-bg');
+      const duration  = heroVideo.duration || 1;
 
-      // ── Kill GSAP ScrollTrigger เดิม ไม่ให้รบกวน scrub mode ──
+      // Kill GSAP ScrollTrigger ทั้งหมด
       ScrollTrigger.getAll().forEach(st => st.kill());
 
-      // ── Reset FG layer ให้ทึบ 100% ไม่โปร่งแสง ──
-      gsap.set(fgLayer, { scale: 1, opacity: 1, clearProps: 'transform' });
-      // ซ่อน BG layer เพื่อไม่ให้ซ้อน
-      gsap.set(bgLayer, { autoAlpha: 0 });
-      // ซ่อน text ระหว่าง scrub
+      // Reset layers — วีดีโอทึบ 100%, ซ่อน BG
+      gsap.set(fgLayer,   { scale: 1, opacity: 1, clearProps: 'transform,opacity' });
+      gsap.set(bgLayer,   { autoAlpha: 0 });
       gsap.set(heroTexts, { autoAlpha: 0 });
 
-      // Seek วีดีโอไปตำแหน่งเริ่มต้น
-      heroVideo.currentTime = 0;
+      // วีดีโอ seek ไป frame สุดท้าย
+      heroVideo.currentTime = duration;
 
-      // smooth seek ด้วย RAF
+      // Scroll ไปยัง bottom ของ scrub zone = แสดง frame สุดท้าย
+      const scrubEnd = driver.offsetHeight - window.innerHeight;
+      window.scrollTo(0, scrubEnd);
+
+      let rafId      = null;
+      let targetTime = duration;
+
       function smoothSeek() {
         const diff = targetTime - heroVideo.currentTime;
         if (Math.abs(diff) > 0.016) {
-          heroVideo.currentTime += diff * 0.2;
+          heroVideo.currentTime += diff * 0.22;
           rafId = requestAnimationFrame(smoothSeek);
         } else {
           heroVideo.currentTime = targetTime;
@@ -618,9 +625,8 @@
       }
 
       window.addEventListener('scroll', () => {
-        const scrollable = driver.offsetHeight - window.innerHeight;
-        const progress   = Math.min(1, Math.max(0, window.scrollY / scrollable));
-
+        const progress = Math.min(1, Math.max(0, window.scrollY / scrubEnd));
+        // progress 0 = frame 0,  progress 1 = last frame
         targetTime = progress * duration;
 
         if (rafId) cancelAnimationFrame(rafId);
