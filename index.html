@@ -505,19 +505,20 @@
     gsap.registerPlugin(ScrollTrigger);
 
     // ── 0. VIDEO + SCROLL LOCK ──────────────────────────────────────────
-    const heroVideo = document.getElementById('hero-video');
+    const heroVideo  = document.getElementById('hero-video');
     heroVideo.pause();
 
-    // ดึง elements ทุกตัวที่ต้อง fade — ใช้ querySelectorAll ครอบคลุมหมด
-    function getHeroTexts() {
-      return [
-        document.getElementById('hero-label'),
-        document.getElementById('hero-title'),
-        document.getElementById('hero-line'),
-        document.getElementById('hero-sub'),
-        document.getElementById('scroll-cue'),
-      ].filter(Boolean);
-    }
+    // Elements ทั้งหมดที่ต้อง fade — pre-select ตอน load
+    const heroTexts = [
+      document.getElementById('hero-label'),
+      document.getElementById('hero-title'),
+      document.getElementById('hero-line'),
+      document.getElementById('hero-sub'),
+      document.getElementById('scroll-cue'),
+    ].filter(Boolean);
+
+    // ตั้ง autoAlpha ให้พร้อม (GSAP จัดการ visibility+opacity คู่กัน = ไม่มี flash)
+    gsap.set(heroTexts, { autoAlpha: 1 });
 
     let videoStarted = false;
 
@@ -541,63 +542,41 @@
       window.removeEventListener('scroll',    forceTop);
     }
 
-    function startVideoSequence() {
+    // ── Trigger: scroll (desktop) หรือ touchstart (mobile) ──
+    function onFirstInteraction() {
       if (videoStarted) return;
       videoStarted = true;
-
-      // Fade ข้อความทุกตัวออก — ใช้ gsap.set inline style เพื่อ override CSS
-      const texts = getHeroTexts();
-      texts.forEach(el => { el.style.transition = 'none'; });
-      gsap.to(texts, {
-        opacity: 0,
-        y: -20,
-        duration: 0.5,
-        stagger: 0.06,
-        ease: 'power2.out',
-        onComplete: () => {
-          texts.forEach(el => el.style.visibility = 'hidden');
-        }
-      });
-
-      heroVideo.play();
+      window.removeEventListener('scroll',     onFirstInteraction);
+      window.removeEventListener('touchstart', onFirstInteraction);
+      heroVideo.play();   // fade จะ trigger จาก 'play' event ด้านล่าง
       lockScroll();
     }
+    window.addEventListener('scroll',     onFirstInteraction, { passive: true });
+    window.addEventListener('touchstart', onFirstInteraction, { passive: true });
 
-    // Desktop: scroll trigger
-    window.addEventListener('scroll', function onFirstScroll() {
-      if (!videoStarted && window.scrollY > 0) {
-        window.removeEventListener('scroll', onFirstScroll);
-        startVideoSequence();
-      }
-    }, { passive: true });
+    // ── Video 'play' → fade text ออก smooth ทันที ──
+    heroVideo.addEventListener('play', () => {
+      gsap.to(heroTexts, {
+        autoAlpha: 0,        // opacity+visibility พร้อมกัน ไม่มีกระพริบ
+        y: -16,
+        duration: 0.55,
+        ease: 'power2.inOut'
+        // ไม่มี stagger — หายพร้อมกันเลย
+      });
+    });
 
-    // Mobile: touchmove trigger
-    window.addEventListener('touchmove', function onFirstTouch() {
-      if (!videoStarted) {
-        window.removeEventListener('touchmove', onFirstTouch);
-        startVideoSequence();
-      }
-    }, { passive: true });
-
-    // ── วีดีโอจบ → unlock + fade ข้อความกลับมา ──
+    // ── วีดีโอจบ → unlock scroll + fade text กลับมา ──
     heroVideo.addEventListener('ended', () => {
       heroVideo.pause();
       unlockScroll();
 
-      const texts = getHeroTexts();
-      texts.forEach(el => {
-        el.style.visibility = 'visible';
+      gsap.to(heroTexts, {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.7,
+        ease: 'power3.out',
+        clearProps: 'all'
       });
-      gsap.fromTo(texts,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1, y: 0,
-          duration: 0.7,
-          stagger: 0.08,
-          ease: 'power3.out',
-          clearProps: 'all'
-        }
-      );
     });
 
 
