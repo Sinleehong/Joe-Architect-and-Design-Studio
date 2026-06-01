@@ -584,52 +584,40 @@
     });
 
     // ── Scroll Scrub ────────────────────────────────────────────────────
+    // Flow:
+    //   scrollY = 0           → video frame 0
+    //   scrollY = scrubEnd    → video last frame (ค้างนิ่ง ชมรายละเอียด)
+    //   scrollY > scrubEnd    → section ถัดไปตามปกติ (scroll ต่อเนื่อง)
     function enableScrollScrub() {
       const driver   = document.querySelector('.hero-scroll-driver');
       const bgLayer  = document.getElementById('layer-bg');
       const duration = heroVideo.duration || 1;
-
-      // 1. Kill เฉพาะ hero ScrollTrigger — section fade-up ยังทำงานปกติ
-      if (heroST) { heroST.kill(); heroST = null; }
-
-      // 2. Reset ทันที (ก่อน scroll) ไม่ให้กระพริบ
-      gsap.set(fgLayer, { clearProps: 'all' });         // reset transform/opacity ทั้งหมด
-      gsap.set(fgLayer, { scale: 1, opacity: 1 });      // ทึบ 100%
-      gsap.set(bgLayer, { autoAlpha: 0, zIndex: -1 });  // ซ่อน BG ใต้ทุกอย่าง
-      gsap.set(heroTexts, { autoAlpha: 0 });
-
-      // 3. วีดีโอที่ frame สุดท้าย
-      heroVideo.currentTime = duration;
-
-      // 4. Scroll ไป bottom ของ scrub zone (= last frame position)
       const scrubEnd = driver.offsetHeight - window.innerHeight;
 
-      // requestAnimationFrame ก่อน scroll เพื่อให้ gsap.set เสร็จก่อน
-      requestAnimationFrame(() => {
+      // ① Kill เฉพาะ hero ScrollTrigger (ไม่แตะ section fade-up)
+      if (heroST) { heroST.kill(); heroST = null; }
+
+      // ② Reset ทุก layer ทันที — ไม่มี transition ไม่มีกระพริบ
+      gsap.set(fgLayer, { clearProps: 'all' });
+      gsap.set(fgLayer, { scale: 1, opacity: 1, zIndex: 1 });
+      gsap.set(bgLayer, { opacity: 0, visibility: 'hidden', zIndex: 0 });
+      gsap.set(heroTexts, { autoAlpha: 0 });
+
+      // ③ วีดีโอ pause ค้างที่ frame สุดท้าย
+      heroVideo.pause();
+      heroVideo.currentTime = duration;
+
+      // ④ Jump scroll ไป scrubEnd ทันที → ผู้ใช้เห็น last frame
+      //    ใช้ 2 frames เพื่อให้ paint เสร็จก่อน scroll
+      requestAnimationFrame(() => requestAnimationFrame(() => {
         window.scrollTo({ top: scrubEnd, behavior: 'instant' });
-      });
+      }));
 
-      let rafId      = null;
-      let targetTime = duration;
-
-      function smoothSeek() {
-        const diff = targetTime - heroVideo.currentTime;
-        if (Math.abs(diff) > 0.016) {
-          heroVideo.currentTime += diff * 0.22;
-          rafId = requestAnimationFrame(smoothSeek);
-        } else {
-          heroVideo.currentTime = targetTime;
-          rafId = null;
-        }
-      }
-
-      window.addEventListener('scroll', () => {
-        const scrolled   = Math.max(0, window.scrollY);
-        const progress   = Math.min(1, scrolled / scrubEnd);
-        targetTime       = progress * duration;
-
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(smoothSeek);
+      // ⑤ Scrub: map scrollY → video.currentTime โดยตรง (no RAF lag)
+      window.addEventListener('scroll', function scrubHandler() {
+        if (window.scrollY > scrubEnd) return; // ออกจาก scrub zone → section ต่อไป
+        const progress = Math.max(0, window.scrollY / scrubEnd);
+        heroVideo.currentTime = progress * duration;
       }, { passive: true });
     }
 
