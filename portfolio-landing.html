@@ -584,31 +584,30 @@
     });
 
     // ── Scroll Scrub ────────────────────────────────────────────────────
-    // Layout: hero-scroll-driver = 350vh
-    // scrubZone = 0 → (driver.height - viewport) px  ← วีดีโอ scrub อยู่ตรงนี้
-    // scrollY = scrubZone end (bottom) → video at last frame
-    // scroll UP  → earlier frames
-    // scroll DOWN past scrubZone → ออกไปยัง section ถัดไปตามปกติ
     function enableScrollScrub() {
-      const driver    = document.querySelector('.hero-scroll-driver');
-      const fgLayer   = document.getElementById('layer-fg');
-      const bgLayer   = document.getElementById('layer-bg');
-      const duration  = heroVideo.duration || 1;
+      const driver   = document.querySelector('.hero-scroll-driver');
+      const bgLayer  = document.getElementById('layer-bg');
+      const duration = heroVideo.duration || 1;
 
-      // Kill GSAP ScrollTrigger ทั้งหมด
-      ScrollTrigger.getAll().forEach(st => st.kill());
+      // 1. Kill เฉพาะ hero ScrollTrigger — section fade-up ยังทำงานปกติ
+      if (heroST) { heroST.kill(); heroST = null; }
 
-      // Reset layers — วีดีโอทึบ 100%, ซ่อน BG
-      gsap.set(fgLayer,   { scale: 1, opacity: 1, clearProps: 'transform,opacity' });
-      gsap.set(bgLayer,   { autoAlpha: 0 });
+      // 2. Reset ทันที (ก่อน scroll) ไม่ให้กระพริบ
+      gsap.set(fgLayer, { clearProps: 'all' });         // reset transform/opacity ทั้งหมด
+      gsap.set(fgLayer, { scale: 1, opacity: 1 });      // ทึบ 100%
+      gsap.set(bgLayer, { autoAlpha: 0, zIndex: -1 });  // ซ่อน BG ใต้ทุกอย่าง
       gsap.set(heroTexts, { autoAlpha: 0 });
 
-      // วีดีโอ seek ไป frame สุดท้าย
+      // 3. วีดีโอที่ frame สุดท้าย
       heroVideo.currentTime = duration;
 
-      // Scroll ไปยัง bottom ของ scrub zone = แสดง frame สุดท้าย
+      // 4. Scroll ไป bottom ของ scrub zone (= last frame position)
       const scrubEnd = driver.offsetHeight - window.innerHeight;
-      window.scrollTo(0, scrubEnd);
+
+      // requestAnimationFrame ก่อน scroll เพื่อให้ gsap.set เสร็จก่อน
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: scrubEnd, behavior: 'instant' });
+      });
 
       let rafId      = null;
       let targetTime = duration;
@@ -625,9 +624,9 @@
       }
 
       window.addEventListener('scroll', () => {
-        const progress = Math.min(1, Math.max(0, window.scrollY / scrubEnd));
-        // progress 0 = frame 0,  progress 1 = last frame
-        targetTime = progress * duration;
+        const scrolled   = Math.max(0, window.scrollY);
+        const progress   = Math.min(1, scrolled / scrubEnd);
+        targetTime       = progress * duration;
 
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(smoothSeek);
@@ -636,23 +635,23 @@
 
 
     // ── 1. HERO FLY-THROUGH ANIMATION ──────────────────────────────────
-    // The foreground (exterior) scales up + fades out as user scrolls,
-    // revealing the interior behind it — the "fly through the door" effect.
-
-    const fgLayer = document.getElementById('layer-fg');
+    const fgLayer   = document.getElementById('layer-fg');
     const heroLabel = document.getElementById('hero-label');
     const heroTitle = document.getElementById('hero-title');
     const heroLine  = document.getElementById('hero-line');
     const heroSub   = document.getElementById('hero-sub');
     const scrollCue = document.getElementById('scroll-cue');
 
-    // Timeline pinned to the scroll driver div
+    // เก็บ reference ไว้เพื่อ kill เฉพาะ hero ST ไม่ให้กระทบ section อื่น
+    let heroST = null;
+
     const heroTl = gsap.timeline({
       scrollTrigger: {
         trigger: '.hero-scroll-driver',
         start: 'top top',
         end: 'bottom bottom',
-        scrub: 1.2,           // smooth scrub
+        scrub: 1.2,
+        onInit: self => { heroST = self; },
       }
     });
 
