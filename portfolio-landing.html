@@ -565,11 +565,12 @@
       });
     });
 
-    // ── วีดีโอจบ → unlock scroll + fade text กลับมา ──
+    // ── วีดีโอจบ → unlock scroll + fade text + เปิด scrub mode ──
     heroVideo.addEventListener('ended', () => {
       heroVideo.pause();
       unlockScroll();
 
+      // Fade text กลับมา
       gsap.to(heroTexts, {
         autoAlpha: 1,
         y: 0,
@@ -577,7 +578,47 @@
         ease: 'power3.out',
         clearProps: 'all'
       });
+
+      // เปิด scroll-scrub: scroll ↕ = ย้อน/เดินวีดีโอ
+      enableScrollScrub();
     });
+
+    // ── Scroll Scrub: map scroll position → video.currentTime ──────────
+    function enableScrollScrub() {
+      const driver   = document.querySelector('.hero-scroll-driver');
+      const duration = heroVideo.duration || 1;
+      let rafId      = null;
+      let targetTime = heroVideo.currentTime;
+
+      // smooth seek — interpolate currentTime ไปหา targetTime
+      function smoothSeek() {
+        const diff = targetTime - heroVideo.currentTime;
+        if (Math.abs(diff) > 0.01) {
+          heroVideo.currentTime += diff * 0.18; // easing factor
+          rafId = requestAnimationFrame(smoothSeek);
+        } else {
+          heroVideo.currentTime = targetTime;
+          rafId = null;
+        }
+      }
+
+      window.addEventListener('scroll', () => {
+        const driverRect  = driver.getBoundingClientRect();
+        const driverTop   = window.scrollY + driverRect.top;
+        const scrollable  = driver.offsetHeight - window.innerHeight;
+        const scrolled    = Math.max(0, window.scrollY - driverTop);
+        const progress    = Math.min(1, scrolled / scrollable);
+
+        targetTime = progress * duration;
+
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(smoothSeek);
+
+        // fade text ตาม progress — ยิ่ง scroll ลงมาก text ยิ่งจาง
+        const textOpacity = 1 - Math.min(1, progress * 3);
+        gsap.set(heroTexts, { autoAlpha: textOpacity });
+      }, { passive: true });
+    }
 
 
     // ── 1. HERO FLY-THROUGH ANIMATION ──────────────────────────────────
