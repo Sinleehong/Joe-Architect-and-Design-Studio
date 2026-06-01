@@ -505,88 +505,68 @@
   <script>
     gsap.registerPlugin(ScrollTrigger);
 
-    // ── 0. VIDEO + SCROLL LOCK LOGIC ──────────────────────────────────
-    const heroVideo  = document.getElementById('hero-video');
-    const heroTexts  = () => [
-      document.getElementById('hero-label'),
-      document.getElementById('hero-title'),
-      document.getElementById('hero-line'),
-      document.getElementById('hero-sub'),
-      document.getElementById('scroll-cue'),
-    ];
-
+    // ── 0. VIDEO + SCROLL LOCK ──────────────────────────────────────────
+    const heroVideo = document.getElementById('hero-video');
     heroVideo.pause();
 
-    let videoStarted  = false;
-    let videoFinished = false;
-    let savedScrollY  = 0;
+    // รวม elements ทุกตัวที่ต้อง fade (รวม bg-content ด้วย)
+    const allHeroText = [
+      '#hero-label','#hero-title','#hero-line',
+      '#hero-sub','#scroll-cue'
+    ].map(s => document.querySelector(s)).filter(Boolean);
 
-    // ── ล็อก scroll: คืนตำแหน่งทุกครั้งที่พยายาม scroll ──
-    function lockScroll(e) {
-      window.scrollTo(0, savedScrollY);
+    let scrollLocked = false;
+    let videoStarted = false;
+
+    // Named functions เพื่อให้ removeEventListener ทำงานได้
+    function preventScroll(e) { e.preventDefault(); }
+    function resetScrollPos()  { window.scrollTo(0, 0); }
+
+    function lockScroll() {
+      scrollLocked = true;
+      window.scrollTo(0, 0);
+      window.addEventListener('wheel',     preventScroll, { passive: false });
+      window.addEventListener('touchmove', preventScroll, { passive: false });
+      window.addEventListener('scroll',    resetScrollPos, { passive: false });
+      document.body.style.overflow = 'hidden';
     }
 
-    function enableScrollLock() {
-      savedScrollY = window.scrollY;
-      window.addEventListener('scroll', lockScroll, { passive: false });
-      window.addEventListener('wheel',  e => e.preventDefault(), { passive: false, capture: true });
-      window.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+    function unlockScroll() {
+      scrollLocked = false;
+      window.removeEventListener('wheel',     preventScroll);
+      window.removeEventListener('touchmove', preventScroll);
+      window.removeEventListener('scroll',    resetScrollPos);
+      document.body.style.overflow = '';
     }
 
-    function disableScrollLock() {
-      window.removeEventListener('scroll', lockScroll);
-      // สร้าง clean listener โดยไม่เก็บ reference ไม่สามารถลบได้ง่าย
-      // แต่ wheel / touchmove ต้องการ named fn — ใช้ flag แทน
-      videoFinished = true;
-    }
-
-    // ── Wheel / touch: ปิดกั้นเมื่อวีดีโอยังเล่นอยู่ ──
-    window.addEventListener('wheel', (e) => {
-      if (videoStarted && !videoFinished) e.preventDefault();
-    }, { passive: false });
-
-    window.addEventListener('touchmove', (e) => {
-      if (videoStarted && !videoFinished) e.preventDefault();
-    }, { passive: false });
-
-    // ── Scroll ครั้งแรก → เล่นวีดีโอ + fade text ออก ──
+    // ── Scroll ครั้งแรก → เล่น + lock + fade out ──
     window.addEventListener('scroll', function onFirstScroll() {
       if (!videoStarted && window.scrollY > 0) {
         videoStarted = true;
-        savedScrollY = window.scrollY;
         window.removeEventListener('scroll', onFirstScroll);
 
-        // Fade text ออก
-        gsap.to(heroTexts(), {
-          opacity: 0,
-          y: -20,
-          duration: 0.5,
-          stagger: 0.06,
+        // Fade ALL text ออก
+        gsap.to(allHeroText, {
+          opacity: 0, y: -18,
+          duration: 0.45, stagger: 0.05,
           ease: 'power2.out'
         });
 
-        // เล่นวีดีโอ
         heroVideo.play();
-
-        // ล็อก scroll ระหว่างเล่น
-        window.scrollTo(0, 0);
-        savedScrollY = 0;
-        enableScrollLock();
+        lockScroll();
       }
     }, { passive: true });
 
-    // ── วีดีโอจบ → unlock scroll + fade text กลับมา ──
+    // ── วีดีโอจบ → unlock + fade in ──
     heroVideo.addEventListener('ended', () => {
       heroVideo.pause();
-      disableScrollLock();
+      unlockScroll();
 
-      // Fade text กลับเข้ามา
-      gsap.to(heroTexts(), {
-        opacity: 1,
-        y: 0,
-        duration: 0.7,
-        stagger: 0.08,
-        ease: 'power3.out'
+      gsap.to(allHeroText, {
+        opacity: 1, y: 0,
+        duration: 0.65, stagger: 0.07,
+        ease: 'power3.out',
+        clearProps: 'transform'
       });
     });
 
