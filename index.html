@@ -149,7 +149,6 @@
     #hero-label {
       text-shadow: 0 1px 12px rgba(0,0,0,0.8), 0 0 24px rgba(0,0,0,0.6);
       color: #e8c97a !important;
-      opacity: 1 !important;
     }
     #hero-sub {
       text-shadow: 0 1px 8px rgba(0,0,0,0.9), 0 2px 20px rgba(0,0,0,0.7);
@@ -509,65 +508,96 @@
     const heroVideo = document.getElementById('hero-video');
     heroVideo.pause();
 
-    // รวม elements ทุกตัวที่ต้อง fade (รวม bg-content ด้วย)
-    const allHeroText = [
-      '#hero-label','#hero-title','#hero-line',
-      '#hero-sub','#scroll-cue'
-    ].map(s => document.querySelector(s)).filter(Boolean);
+    // ดึง elements ทุกตัวที่ต้อง fade — ใช้ querySelectorAll ครอบคลุมหมด
+    function getHeroTexts() {
+      return [
+        document.getElementById('hero-label'),
+        document.getElementById('hero-title'),
+        document.getElementById('hero-line'),
+        document.getElementById('hero-sub'),
+        document.getElementById('scroll-cue'),
+      ].filter(Boolean);
+    }
 
-    let scrollLocked = false;
     let videoStarted = false;
 
-    // Named functions เพื่อให้ removeEventListener ทำงานได้
     function preventScroll(e) { e.preventDefault(); }
-    function resetScrollPos()  { window.scrollTo(0, 0); }
+    function forceTop()        { window.scrollTo(0, 0); }
 
     function lockScroll() {
-      scrollLocked = true;
       window.scrollTo(0, 0);
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow            = 'hidden';
       window.addEventListener('wheel',     preventScroll, { passive: false });
       window.addEventListener('touchmove', preventScroll, { passive: false });
-      window.addEventListener('scroll',    resetScrollPos, { passive: false });
-      document.body.style.overflow = 'hidden';
+      window.addEventListener('scroll',    forceTop);
     }
 
     function unlockScroll() {
-      scrollLocked = false;
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow            = '';
       window.removeEventListener('wheel',     preventScroll);
       window.removeEventListener('touchmove', preventScroll);
-      window.removeEventListener('scroll',    resetScrollPos);
-      document.body.style.overflow = '';
+      window.removeEventListener('scroll',    forceTop);
     }
 
-    // ── Scroll ครั้งแรก → เล่น + lock + fade out ──
+    function startVideoSequence() {
+      if (videoStarted) return;
+      videoStarted = true;
+
+      // Fade ข้อความทุกตัวออก — ใช้ gsap.set inline style เพื่อ override CSS
+      const texts = getHeroTexts();
+      texts.forEach(el => { el.style.transition = 'none'; });
+      gsap.to(texts, {
+        opacity: 0,
+        y: -20,
+        duration: 0.5,
+        stagger: 0.06,
+        ease: 'power2.out',
+        onComplete: () => {
+          texts.forEach(el => el.style.visibility = 'hidden');
+        }
+      });
+
+      heroVideo.play();
+      lockScroll();
+    }
+
+    // Desktop: scroll trigger
     window.addEventListener('scroll', function onFirstScroll() {
       if (!videoStarted && window.scrollY > 0) {
-        videoStarted = true;
         window.removeEventListener('scroll', onFirstScroll);
-
-        // Fade ALL text ออก
-        gsap.to(allHeroText, {
-          opacity: 0, y: -18,
-          duration: 0.45, stagger: 0.05,
-          ease: 'power2.out'
-        });
-
-        heroVideo.play();
-        lockScroll();
+        startVideoSequence();
       }
     }, { passive: true });
 
-    // ── วีดีโอจบ → unlock + fade in ──
+    // Mobile: touchmove trigger
+    window.addEventListener('touchmove', function onFirstTouch() {
+      if (!videoStarted) {
+        window.removeEventListener('touchmove', onFirstTouch);
+        startVideoSequence();
+      }
+    }, { passive: true });
+
+    // ── วีดีโอจบ → unlock + fade ข้อความกลับมา ──
     heroVideo.addEventListener('ended', () => {
       heroVideo.pause();
       unlockScroll();
 
-      gsap.to(allHeroText, {
-        opacity: 1, y: 0,
-        duration: 0.65, stagger: 0.07,
-        ease: 'power3.out',
-        clearProps: 'transform'
+      const texts = getHeroTexts();
+      texts.forEach(el => {
+        el.style.visibility = 'visible';
       });
+      gsap.fromTo(texts,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1, y: 0,
+          duration: 0.7,
+          stagger: 0.08,
+          ease: 'power3.out',
+          clearProps: 'all'
+        }
+      );
     });
 
 
