@@ -586,15 +586,30 @@
     // ── Scroll Scrub: map scroll position → video.currentTime ──────────
     function enableScrollScrub() {
       const driver   = document.querySelector('.hero-scroll-driver');
+      const fgLayer  = document.getElementById('layer-fg');
+      const bgLayer  = document.getElementById('layer-bg');
       const duration = heroVideo.duration || 1;
       let rafId      = null;
-      let targetTime = heroVideo.currentTime;
+      let targetTime = 0;
 
-      // smooth seek — interpolate currentTime ไปหา targetTime
+      // ── Kill GSAP ScrollTrigger เดิม ไม่ให้รบกวน scrub mode ──
+      ScrollTrigger.getAll().forEach(st => st.kill());
+
+      // ── Reset FG layer ให้ทึบ 100% ไม่โปร่งแสง ──
+      gsap.set(fgLayer, { scale: 1, opacity: 1, clearProps: 'transform' });
+      // ซ่อน BG layer เพื่อไม่ให้ซ้อน
+      gsap.set(bgLayer, { autoAlpha: 0 });
+      // ซ่อน text ระหว่าง scrub
+      gsap.set(heroTexts, { autoAlpha: 0 });
+
+      // Seek วีดีโอไปตำแหน่งเริ่มต้น
+      heroVideo.currentTime = 0;
+
+      // smooth seek ด้วย RAF
       function smoothSeek() {
         const diff = targetTime - heroVideo.currentTime;
-        if (Math.abs(diff) > 0.01) {
-          heroVideo.currentTime += diff * 0.18; // easing factor
+        if (Math.abs(diff) > 0.016) {
+          heroVideo.currentTime += diff * 0.2;
           rafId = requestAnimationFrame(smoothSeek);
         } else {
           heroVideo.currentTime = targetTime;
@@ -603,20 +618,13 @@
       }
 
       window.addEventListener('scroll', () => {
-        const driverRect  = driver.getBoundingClientRect();
-        const driverTop   = window.scrollY + driverRect.top;
-        const scrollable  = driver.offsetHeight - window.innerHeight;
-        const scrolled    = Math.max(0, window.scrollY - driverTop);
-        const progress    = Math.min(1, scrolled / scrollable);
+        const scrollable = driver.offsetHeight - window.innerHeight;
+        const progress   = Math.min(1, Math.max(0, window.scrollY / scrollable));
 
         targetTime = progress * duration;
 
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(smoothSeek);
-
-        // fade text ตาม progress — ยิ่ง scroll ลงมาก text ยิ่งจาง
-        const textOpacity = 1 - Math.min(1, progress * 3);
-        gsap.set(heroTexts, { autoAlpha: textOpacity });
       }, { passive: true });
     }
 
